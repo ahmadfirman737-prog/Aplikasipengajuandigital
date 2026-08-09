@@ -57,13 +57,8 @@ export default function App() {
     }, 3500);
   };
 
-  // Initial cloud fetch on mount
-  useEffect(() => {
-    handleCloudSync(false);
-  }, []);
-
-  const handleCloudSync = async (showToastMsg = true) => {
-    setIsSyncing(true);
+  const handleCloudSync = async (showToastMsg = true, isBackground = false) => {
+    if (!isBackground) setIsSyncing(true);
     const cloud = await fetchCloudData();
     if (cloud) {
       if (cloud.pengajuanList) {
@@ -82,8 +77,52 @@ export default function App() {
         showToast('Mode offline aktif (menggunakan data tersimpan lokal)', 'info');
       }
     }
-    setIsSyncing(false);
+    if (!isBackground) setIsSyncing(false);
   };
+
+  // Initial cloud fetch on mount & set up real-time sync loop
+  useEffect(() => {
+    handleCloudSync(false, true);
+
+    // Poll cloud every 3 seconds for automatic real-time sync across devices
+    const intervalId = setInterval(() => {
+      handleCloudSync(false, true);
+    }, 3000);
+
+    // Listen to BroadcastChannel for instant same-browser cross-tab sync
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('kusuma_realtime_channel');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'SYNC_DATA') {
+            if (event.data.pengajuanList) {
+              setPengajuanList(event.data.pengajuanList);
+              saveLocalPengajuan(event.data.pengajuanList);
+            }
+            if (event.data.loginHistory) {
+              setLoginHistory(event.data.loginHistory);
+              saveLocalLoginHistory(event.data.loginHistory);
+            }
+          }
+        };
+      } catch (e) {
+        console.warn('BroadcastChannel error in App', e);
+      }
+    }
+
+    // Sync when tab regains focus
+    const handleFocus = () => {
+      handleCloudSync(false, true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      if (bc) bc.close();
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);

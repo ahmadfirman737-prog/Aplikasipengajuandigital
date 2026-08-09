@@ -79,6 +79,18 @@ export function saveLocalLoginHistory(history: LoginRecord[]) {
   }
 }
 
+export function notifyRealtimeSync(pengajuanList: PengajuanItem[], loginHistory: LoginRecord[]) {
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const bc = new BroadcastChannel('kusuma_realtime_channel');
+      bc.postMessage({ type: 'SYNC_DATA', pengajuanList, loginHistory });
+      bc.close();
+    } catch (e) {
+      console.warn("BroadcastChannel error", e);
+    }
+  }
+}
+
 export async function fetchCloudData(): Promise<{ pengajuanList?: PengajuanItem[]; loginHistory?: LoginRecord[] } | null> {
   try {
     const response = await fetch(CLOUD_BIN_URL + "/latest", {
@@ -103,6 +115,7 @@ export async function fetchCloudData(): Promise<{ pengajuanList?: PengajuanItem[
 export async function pushCloudData(pengajuanList: PengajuanItem[], loginHistory: LoginRecord[]) {
   saveLocalPengajuan(pengajuanList);
   saveLocalLoginHistory(loginHistory);
+  notifyRealtimeSync(pengajuanList, loginHistory);
 
   try {
     await fetch(CLOUD_BIN_URL, {
