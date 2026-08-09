@@ -63,11 +63,8 @@ export default function App() {
     const cloud = await fetchCloudData();
     if (cloud) {
       if (cloud.pengajuanList) {
-        setPengajuanList((prev) => {
-          const merged = mergePengajuanLists(prev, cloud.pengajuanList!);
-          saveLocalPengajuan(merged);
-          return merged;
-        });
+        setPengajuanList(cloud.pengajuanList);
+        saveLocalPengajuan(cloud.pengajuanList);
       }
       if (cloud.loginHistory && cloud.loginHistory.length > 0) {
         setLoginHistory(cloud.loginHistory);
@@ -101,11 +98,8 @@ export default function App() {
         bc.onmessage = (event) => {
           if (event.data?.type === 'SYNC_DATA') {
             if (event.data.pengajuanList) {
-              setPengajuanList((prev) => {
-                const merged = mergePengajuanLists(prev, event.data.pengajuanList);
-                saveLocalPengajuan(merged);
-                return merged;
-              });
+              setPengajuanList(event.data.pengajuanList);
+              saveLocalPengajuan(event.data.pengajuanList);
             }
             if (event.data.loginHistory) {
               setLoginHistory(event.data.loginHistory);
@@ -118,16 +112,20 @@ export default function App() {
       }
     }
 
-    // Sync when tab regains focus
-    const handleFocus = () => {
-      handleCloudSync(false, true);
+    // Sync when tab regains focus or becomes visible
+    const handleFocusOrVisibility = () => {
+      if (!document.hidden) {
+        handleCloudSync(false, true);
+      }
     };
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener('focus', handleFocusOrVisibility);
+    document.addEventListener('visibilitychange', handleFocusOrVisibility);
 
     return () => {
       clearInterval(intervalId);
       if (bc) bc.close();
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleFocusOrVisibility);
+      document.removeEventListener('visibilitychange', handleFocusOrVisibility);
     };
   }, []);
 
@@ -154,10 +152,18 @@ export default function App() {
   };
 
   const handleSubmitPengajuan = async (newItem: PengajuanItem) => {
-    const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+    // Optimistic UI update
+    const currentList = pengajuanList;
+    const optimisticList = [newItem, ...currentList];
+    setPengajuanList(optimisticList);
+    saveLocalPengajuan(optimisticList);
 
-    const updatedList = mergePengajuanLists([newItem, ...pengajuanList], cloudList);
+    // Fetch fresh cloud list first to prevent overwriting parallel submissions
+    const cloud = await fetchCloudData();
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : currentList;
+
+    // Merge newItem with cloudList
+    const updatedList = mergePengajuanLists([newItem], cloudList);
     setPengajuanList(updatedList);
     await pushCloudData(updatedList, loginHistory);
 
@@ -167,10 +173,9 @@ export default function App() {
 
   const handleUpdateStatusRTL = async (id: string, newStatus: StatusRTL) => {
     const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : pengajuanList;
 
-    const baseList = mergePengajuanLists(pengajuanList, cloudList);
-    const updatedList = baseList.map((item) =>
+    const updatedList = cloudList.map((item) =>
       item.id === id ? { ...item, status: newStatus } : item
     );
 
@@ -181,10 +186,9 @@ export default function App() {
 
   const handleDeletePengajuan = async (id: string) => {
     const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : pengajuanList;
 
-    const baseList = mergePengajuanLists(pengajuanList, cloudList);
-    const updatedList = baseList.filter((item) => item.id !== id);
+    const updatedList = cloudList.filter((item) => item.id !== id);
 
     setPengajuanList(updatedList);
     await pushCloudData(updatedList, loginHistory);

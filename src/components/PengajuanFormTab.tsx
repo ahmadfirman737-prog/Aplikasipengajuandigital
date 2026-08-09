@@ -34,8 +34,8 @@ export const PengajuanFormTab: React.FC<PengajuanFormTabProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const newId = `REQ-00${randomSuffix}`;
+    const uniqueSuffix = `${Date.now().toString().slice(-5)}${Math.floor(Math.random() * 90 + 10)}`;
+    const newId = `REQ-${uniqueSuffix}`;
     const dateStr = new Date().toISOString().split('T')[0];
 
     const newItem: PengajuanItem = {

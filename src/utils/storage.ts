@@ -90,28 +90,25 @@ export function notifyRealtimeSync(pengajuanList: PengajuanItem[], loginHistory:
   }
 }
 
+/**
+ * Merges local items with cloud items.
+ * Cloud data is authoritative for existing items (so Admin updates are preserved).
+ * Local-only items (newly submitted offline) are kept.
+ */
 export function mergePengajuanLists(localList: PengajuanItem[], cloudList: PengajuanItem[]): PengajuanItem[] {
   const map = new Map<string, PengajuanItem>();
 
+  // 1. Add cloud items (authoritative)
   for (const item of cloudList) {
     if (item && item.id) {
       map.set(item.id, item);
     }
   }
 
+  // 2. Add local-only items if missing in cloud
   for (const item of localList) {
-    if (item && item.id) {
-      if (!map.has(item.id)) {
-        map.set(item.id, item);
-      } else {
-        const existing = map.get(item.id)!;
-        map.set(item.id, {
-          ...existing,
-          ...item,
-          status: item.status !== 'Sedang Dalam Antrian' ? item.status : existing.status,
-          catatanAdmin: (item.catatanAdmin && item.catatanAdmin !== '-') ? item.catatanAdmin : existing.catatanAdmin
-        });
-      }
+    if (item && item.id && !map.has(item.id)) {
+      map.set(item.id, item);
     }
   }
 
@@ -119,25 +116,17 @@ export function mergePengajuanLists(localList: PengajuanItem[], cloudList: Penga
 }
 
 export async function fetchCloudData(): Promise<{ pengajuanList?: PengajuanItem[]; loginHistory?: LoginRecord[] } | null> {
-  // Try /api/sync first
   try {
-    const res = await fetch("/api/sync", { cache: 'no-store' });
-    if (res.ok) {
-      const json = await res.json();
-      if (json && Array.isArray(json.pengajuanList)) {
-        return {
-          pengajuanList: json.pengajuanList,
-          loginHistory: json.loginHistory || []
-        };
+    const cacheBustUrl = `${JSONBLOB_URL}?_t=${Date.now()}`;
+    const response = await fetch(cacheBustUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
       }
-    }
-  } catch {
-    // /api/sync not available, fallback
-  }
+    });
 
-  // Fallback to jsonblob directly
-  try {
-    const response = await fetch(JSONBLOB_URL, { cache: 'no-store' });
     if (response.ok) {
       const json = await response.json();
       if (json && Array.isArray(json.pengajuanList)) {
@@ -148,42 +137,37 @@ export async function fetchCloudData(): Promise<{ pengajuanList?: PengajuanItem[
       }
     }
   } catch (err) {
-    console.warn("Direct JSONBlob fetch failed", err);
+    console.warn("Cloud data fetch failed:", err);
   }
 
   return null;
 }
 
-export async function pushCloudData(pengajuanList: PengajuanItem[], loginHistory: LoginRecord[]) {
+export async function pushCloudData(pengajuanList: PengajuanItem[], loginHistory: LoginRecord[]): Promise<boolean> {
   saveLocalPengajuan(pengajuanList);
   saveLocalLoginHistory(loginHistory);
   notifyRealtimeSync(pengajuanList, loginHistory);
 
   const payload = { pengajuanList, loginHistory };
 
-  let pushedToApi = false;
   try {
-    const res = await fetch("/api/sync", {
-      method: 'POST',
-      headers: { "Content-Type": "application/json" },
+    const response = await fetch(JSONBLOB_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify(payload)
     });
-    if (res.ok) {
-      pushedToApi = true;
+
+    if (response.ok) {
+      return true;
+    } else {
+      console.warn("Cloud push HTTP error:", response.status);
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn("Cloud push fetch failed:", err);
   }
 
-  try {
-    await fetch(JSONBLOB_URL, {
-      method: 'PUT',
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    if (!pushedToApi) {
-      console.warn("Cloud push to JSONBlob failed", err);
-    }
-  }
+  return false;
 }
