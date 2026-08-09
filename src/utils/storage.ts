@@ -8,8 +8,7 @@ const STORAGE_KEYS = {
   LOGIN_HISTORY: 'kusuma_loginHistory_v2'
 };
 
-const CLOUD_BIN_URL = "https://api.jsonbin.io/v3/b/662eaf6facd3cb34a83e6012";
-const CLOUD_API_KEY = "$2a$10$tZ27gG3Hw9h5dKx.w4xLkuG8q1dJz3sJk5m5L5Ww5Jz3sJk5m5L5W";
+const JSONBLOB_URL = "https://jsonblob.com/api/jsonBlob/019fe799-3aca-7d87-992f-a8a0b784dc16";
 
 export function loadLocalSettings(): AppSettings {
   try {
@@ -91,25 +90,68 @@ export function notifyRealtimeSync(pengajuanList: PengajuanItem[], loginHistory:
   }
 }
 
+export function mergePengajuanLists(localList: PengajuanItem[], cloudList: PengajuanItem[]): PengajuanItem[] {
+  const map = new Map<string, PengajuanItem>();
+
+  for (const item of cloudList) {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  }
+
+  for (const item of localList) {
+    if (item && item.id) {
+      if (!map.has(item.id)) {
+        map.set(item.id, item);
+      } else {
+        const existing = map.get(item.id)!;
+        map.set(item.id, {
+          ...existing,
+          ...item,
+          status: item.status !== 'Sedang Dalam Antrian' ? item.status : existing.status,
+          catatanAdmin: (item.catatanAdmin && item.catatanAdmin !== '-') ? item.catatanAdmin : existing.catatanAdmin
+        });
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => (b.id > a.id ? 1 : -1));
+}
+
 export async function fetchCloudData(): Promise<{ pengajuanList?: PengajuanItem[]; loginHistory?: LoginRecord[] } | null> {
+  // Try /api/sync first
   try {
-    const response = await fetch(CLOUD_BIN_URL + "/latest", {
-      headers: { "X-Master-Key": CLOUD_API_KEY }
-    });
-    if (response.ok) {
-      const json = await response.json();
-      if (json && json.record) {
+    const res = await fetch("/api/sync", { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && Array.isArray(json.pengajuanList)) {
         return {
-          pengajuanList: json.record.pengajuanList,
-          loginHistory: json.record.loginHistory
+          pengajuanList: json.pengajuanList,
+          loginHistory: json.loginHistory || []
         };
       }
     }
-    return null;
-  } catch (err) {
-    console.warn("Cloud sync fetch failed, using local storage fallback", err);
-    return null;
+  } catch {
+    // /api/sync not available, fallback
   }
+
+  // Fallback to jsonblob directly
+  try {
+    const response = await fetch(JSONBLOB_URL, { cache: 'no-store' });
+    if (response.ok) {
+      const json = await response.json();
+      if (json && Array.isArray(json.pengajuanList)) {
+        return {
+          pengajuanList: json.pengajuanList,
+          loginHistory: json.loginHistory || []
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Direct JSONBlob fetch failed", err);
+  }
+
+  return null;
 }
 
 export async function pushCloudData(pengajuanList: PengajuanItem[], loginHistory: LoginRecord[]) {
@@ -117,16 +159,31 @@ export async function pushCloudData(pengajuanList: PengajuanItem[], loginHistory
   saveLocalLoginHistory(loginHistory);
   notifyRealtimeSync(pengajuanList, loginHistory);
 
+  const payload = { pengajuanList, loginHistory };
+
+  let pushedToApi = false;
   try {
-    await fetch(CLOUD_BIN_URL, {
+    const res = await fetch("/api/sync", {
+      method: 'POST',
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      pushedToApi = true;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    await fetch(JSONBLOB_URL, {
       method: 'PUT',
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": CLOUD_API_KEY
-      },
-      body: JSON.stringify({ pengajuanList, loginHistory })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
   } catch (err) {
-    console.warn("Cloud push failed, saved to local storage", err);
+    if (!pushedToApi) {
+      console.warn("Cloud push to JSONBlob failed", err);
+    }
   }
 }

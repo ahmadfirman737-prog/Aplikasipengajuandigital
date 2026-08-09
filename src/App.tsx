@@ -17,7 +17,8 @@ import {
   loadLocalLoginHistory,
   saveLocalLoginHistory,
   fetchCloudData,
-  pushCloudData
+  pushCloudData,
+  mergePengajuanLists
 } from './utils/storage';
 
 import { LoginPage } from './components/LoginPage';
@@ -62,8 +63,11 @@ export default function App() {
     const cloud = await fetchCloudData();
     if (cloud) {
       if (cloud.pengajuanList) {
-        setPengajuanList(cloud.pengajuanList);
-        saveLocalPengajuan(cloud.pengajuanList);
+        setPengajuanList((prev) => {
+          const merged = mergePengajuanLists(prev, cloud.pengajuanList!);
+          saveLocalPengajuan(merged);
+          return merged;
+        });
       }
       if (cloud.loginHistory && cloud.loginHistory.length > 0) {
         setLoginHistory(cloud.loginHistory);
@@ -84,10 +88,10 @@ export default function App() {
   useEffect(() => {
     handleCloudSync(false, true);
 
-    // Poll cloud every 3 seconds for automatic real-time sync across devices
+    // Poll cloud every 2 seconds for automatic real-time sync across devices
     const intervalId = setInterval(() => {
       handleCloudSync(false, true);
-    }, 3000);
+    }, 2000);
 
     // Listen to BroadcastChannel for instant same-browser cross-tab sync
     let bc: BroadcastChannel | null = null;
@@ -97,8 +101,11 @@ export default function App() {
         bc.onmessage = (event) => {
           if (event.data?.type === 'SYNC_DATA') {
             if (event.data.pengajuanList) {
-              setPengajuanList(event.data.pengajuanList);
-              saveLocalPengajuan(event.data.pengajuanList);
+              setPengajuanList((prev) => {
+                const merged = mergePengajuanLists(prev, event.data.pengajuanList);
+                saveLocalPengajuan(merged);
+                return merged;
+              });
             }
             if (event.data.loginHistory) {
               setLoginHistory(event.data.loginHistory);
@@ -146,28 +153,41 @@ export default function App() {
     showToast('Berhasil keluar aplikasi', 'info');
   };
 
-  const handleSubmitPengajuan = (newItem: PengajuanItem) => {
-    const updatedList = [newItem, ...pengajuanList];
+  const handleSubmitPengajuan = async (newItem: PengajuanItem) => {
+    const cloud = await fetchCloudData();
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+
+    const updatedList = mergePengajuanLists([newItem, ...pengajuanList], cloudList);
     setPengajuanList(updatedList);
-    pushCloudData(updatedList, loginHistory);
+    await pushCloudData(updatedList, loginHistory);
 
     showToast('Pengajuan berhasil dikirim & tersinkron ke semua perangkat!', 'success');
     setActiveTab('status');
   };
 
-  const handleUpdateStatusRTL = (id: string, newStatus: StatusRTL) => {
-    const updatedList = pengajuanList.map((item) =>
+  const handleUpdateStatusRTL = async (id: string, newStatus: StatusRTL) => {
+    const cloud = await fetchCloudData();
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+
+    const baseList = mergePengajuanLists(pengajuanList, cloudList);
+    const updatedList = baseList.map((item) =>
       item.id === id ? { ...item, status: newStatus } : item
     );
+
     setPengajuanList(updatedList);
-    pushCloudData(updatedList, loginHistory);
+    await pushCloudData(updatedList, loginHistory);
     showToast(`Status pengajuan ${id} diperbarui: ${newStatus}`, 'success');
   };
 
-  const handleDeletePengajuan = (id: string) => {
-    const updatedList = pengajuanList.filter((item) => item.id !== id);
+  const handleDeletePengajuan = async (id: string) => {
+    const cloud = await fetchCloudData();
+    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : [];
+
+    const baseList = mergePengajuanLists(pengajuanList, cloudList);
+    const updatedList = baseList.filter((item) => item.id !== id);
+
     setPengajuanList(updatedList);
-    pushCloudData(updatedList, loginHistory);
+    await pushCloudData(updatedList, loginHistory);
     showToast(`Pengajuan ${id} berhasil dihapus`, 'success');
   };
 
