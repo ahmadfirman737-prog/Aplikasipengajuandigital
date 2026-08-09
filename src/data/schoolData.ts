@@ -54,78 +54,7 @@ export const INITIAL_USERS: UserAccount[] = [
   { id: 44, nama: "DADANG KAMALUDIN", username: "dadangkamaludin", password: "123456", role: "User" }
 ];
 
-export const INITIAL_PENGAJUAN: PengajuanItem[] = [
-  {
-    id: "REQ-00101",
-    tgl: "2026-08-01",
-    pengaju: "RAHMAN WIJAYA, S.Kom",
-    barang: "Proyektor Epson EB-X500 3600 Lumens",
-    spesifikasi: "Resolusi XGA, HDMI, Lumens 3600 untuk Ruang Multimedia",
-    qty: 2,
-    satuan: "Unit",
-    harga: 6850000,
-    ket: "Diperlukan untuk menunjang pembelajaran interaktif di laboratorium Komputer dan ruang Multimedia siswa.",
-    foto: null,
-    status: "Sedang Dalam Proses",
-    catatanAdmin: "Menunggu pencairan anggaran sekolah Q3."
-  },
-  {
-    id: "REQ-00102",
-    tgl: "2026-08-03",
-    pengaju: "TARJO SUGIANA, S.Pd.",
-    barang: "Sound System Portable Wireless & Microphone",
-    spesifikasi: "Dual Wireless Mic, Battery Built-in 12 inch Speaker",
-    qty: 1,
-    satuan: "Set",
-    harga: 3450000,
-    ket: "Pengadaan peralatan sound system untuk kegiatan upacara bendera dan ektrakurikuler pramuka.",
-    foto: null,
-    status: "Selesai",
-    catatanAdmin: "Sudah dibeli dan diserahterimakan ke ruang sarpras."
-  },
-  {
-    id: "REQ-00103",
-    tgl: "2026-08-05",
-    pengaju: "NINA ASMANAH,S.Si",
-    barang: "Kertas HVS PaperOne A4 80gr",
-    spesifikasi: "Ukuran A4, 80 gram, Warna Putih",
-    qty: 20,
-    satuan: "Rim",
-    harga: 58000,
-    ket: "Kebutuhan mendesak percetakan lembar soal Asesmen Sumatif Tengah Semester (ASTS).",
-    foto: null,
-    status: "Selesai",
-    catatanAdmin: "Disetujui dan siap diambil di TU."
-  },
-  {
-    id: "REQ-00104",
-    tgl: "2026-08-07",
-    pengaju: "SITI SOLEHAH, S.Sn.",
-    barang: "Set Alat Musik Angklung & Kendang Seni",
-    spesifikasi: "Angklung 2 Octave Diatonis Kayu Bambu Pilihan",
-    qty: 1,
-    satuan: "Set",
-    harga: 4500000,
-    ket: "Mendukung persiapan pementasan seni budaya dan lomba FLS2N tingkat Kabupaten Bogor.",
-    foto: null,
-    status: "Sedang Dalam Antrian",
-    catatanAdmin: "-"
-  },
-  {
-    id: "REQ-00105",
-    tgl: "2026-08-08",
-    pengaju: "ATEP KURNIAWAN, S.Pd",
-    barang: "Bola Basket Molten BG4500 Original",
-    spesifikasi: "Size 7, PU Leather, FIBA Approved",
-    qty: 5,
-    satuan: "Buah",
-    harga: 850000,
-    ket: "Penggantian bola olahraga yang rusak untuk pembelajaran PJOK.",
-    foto: null,
-    status: "Pengajuan Ditolak",
-    catatanAdmin: "Anggaran olahraga bulan ini telah terpakai untuk pembelian jaring voli."
-  }
-];
+export const INITIAL_PENGAJUAN: PengajuanItem[] = [];
 
 export const INITIAL_LOGIN_HISTORY: LoginRecord[] = [
   { id: "lh-1", user: "ahmadfirmansyah", role: "Admin", waktu: "2026-08-09 09:30:12", status: "Berhasil" },

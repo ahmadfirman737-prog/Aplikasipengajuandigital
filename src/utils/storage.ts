@@ -2,7 +2,7 @@ import { PengajuanItem, UserAccount, AppSettings, LoginRecord } from '../types';
 import { INITIAL_PENGAJUAN, INITIAL_USERS, INITIAL_SCHOOL_SETTINGS, INITIAL_LOGIN_HISTORY } from '../data/schoolData';
 
 const STORAGE_KEYS = {
-  PENGAJUAN: 'kusuma_pengajuanList_v2',
+  PENGAJUAN: 'kusuma_pengajuanList_v3',
   USERS: 'kusuma_usersList_v2',
   SETTINGS: 'kusuma_settings_v2',
   LOGIN_HISTORY: 'kusuma_loginHistory_v2'

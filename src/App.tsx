@@ -66,7 +66,7 @@ export default function App() {
     setIsSyncing(true);
     const cloud = await fetchCloudData();
     if (cloud) {
-      if (cloud.pengajuanList && cloud.pengajuanList.length > 0) {
+      if (cloud.pengajuanList) {
         setPengajuanList(cloud.pengajuanList);
         saveLocalPengajuan(cloud.pengajuanList);
       }
