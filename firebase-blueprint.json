@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "pengajuan": {
+      "title": "Pengajuan Barang",
+      "description": "Data pengajuan barang sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tgl": { "type": "string" },
+        "pengaju": { "type": "string" },
+        "barang": { "type": "string" },
+        "spesifikasi": { "type": "string" },
+        "qty": { "type": "number" },
+        "satuan": { "type": "string" },
+        "harga": { "type": "number" },
+        "ket": { "type": "string" },
+        "foto": { "type": "string" },
+        "status": { "type": "string" },
+        "catatanAdmin": { "type": "string" }
+      },
+      "required": ["id", "tgl", "pengaju", "barang", "qty", "satuan", "harga", "status"]
+    },
+    "login_history": {
+      "title": "Riwayat Login",
+      "description": "Catatan riwayat login user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user": { "type": "string" },
+        "role": { "type": "string" },
+        "waktu": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "user", "role", "waktu", "status"]
+    }
+  }
+}

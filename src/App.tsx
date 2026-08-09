@@ -15,11 +15,16 @@ import {
   loadLocalPengajuan,
   saveLocalPengajuan,
   loadLocalLoginHistory,
-  saveLocalLoginHistory,
-  fetchCloudData,
-  pushCloudData,
-  mergePengajuanLists
+  saveLocalLoginHistory
 } from './utils/storage';
+import {
+  subscribeToPengajuan,
+  subscribeToLoginHistory,
+  savePengajuanToFirestore,
+  deletePengajuanFromFirestore,
+  addLoginRecordToFirestore,
+  fetchAllPengajuanFromFirestore
+} from './lib/firebase';
 
 import { LoginPage } from './components/LoginPage';
 import { Sidebar } from './components/Sidebar';
@@ -58,74 +63,36 @@ export default function App() {
     }, 3500);
   };
 
-  const handleCloudSync = async (showToastMsg = true, isBackground = false) => {
-    if (!isBackground) setIsSyncing(true);
-    const cloud = await fetchCloudData();
-    if (cloud) {
-      if (cloud.pengajuanList) {
-        setPengajuanList(cloud.pengajuanList);
-        saveLocalPengajuan(cloud.pengajuanList);
-      }
-      if (cloud.loginHistory && cloud.loginHistory.length > 0) {
-        setLoginHistory(cloud.loginHistory);
-        saveLocalLoginHistory(cloud.loginHistory);
-      }
-      if (showToastMsg) {
-        showToast('Data berhasil disinkronkan dari Cloud!', 'success');
-      }
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    const cloudItems = await fetchAllPengajuanFromFirestore();
+    if (cloudItems && cloudItems.length > 0) {
+      setPengajuanList(cloudItems);
+      saveLocalPengajuan(cloudItems);
+      showToast('Data berhasil disinkronkan dari Firebase Cloud!', 'success');
     } else {
-      if (showToastMsg) {
-        showToast('Mode offline aktif (menggunakan data tersimpan lokal)', 'info');
-      }
+      showToast('Data terkini sudah tersinkronkan!', 'info');
     }
-    if (!isBackground) setIsSyncing(false);
+    setIsSyncing(false);
   };
 
-  // Initial cloud fetch on mount & set up real-time sync loop
+  // Real-time Firestore synchronization listener
   useEffect(() => {
-    handleCloudSync(false, true);
+    const unsubscribePengajuan = subscribeToPengajuan((items) => {
+      setPengajuanList(items);
+      saveLocalPengajuan(items);
+    });
 
-    // Poll cloud every 2 seconds for automatic real-time sync across devices
-    const intervalId = setInterval(() => {
-      handleCloudSync(false, true);
-    }, 2000);
-
-    // Listen to BroadcastChannel for instant same-browser cross-tab sync
-    let bc: BroadcastChannel | null = null;
-    if (typeof BroadcastChannel !== 'undefined') {
-      try {
-        bc = new BroadcastChannel('kusuma_realtime_channel');
-        bc.onmessage = (event) => {
-          if (event.data?.type === 'SYNC_DATA') {
-            if (event.data.pengajuanList) {
-              setPengajuanList(event.data.pengajuanList);
-              saveLocalPengajuan(event.data.pengajuanList);
-            }
-            if (event.data.loginHistory) {
-              setLoginHistory(event.data.loginHistory);
-              saveLocalLoginHistory(event.data.loginHistory);
-            }
-          }
-        };
-      } catch (e) {
-        console.warn('BroadcastChannel error in App', e);
+    const unsubscribeLogin = subscribeToLoginHistory((records) => {
+      if (records && records.length > 0) {
+        setLoginHistory(records);
+        saveLocalLoginHistory(records);
       }
-    }
-
-    // Sync when tab regains focus or becomes visible
-    const handleFocusOrVisibility = () => {
-      if (!document.hidden) {
-        handleCloudSync(false, true);
-      }
-    };
-    window.addEventListener('focus', handleFocusOrVisibility);
-    document.addEventListener('visibilitychange', handleFocusOrVisibility);
+    });
 
     return () => {
-      clearInterval(intervalId);
-      if (bc) bc.close();
-      window.removeEventListener('focus', handleFocusOrVisibility);
-      document.removeEventListener('visibilitychange', handleFocusOrVisibility);
+      unsubscribePengajuan();
+      unsubscribeLogin();
     };
   }, []);
 
@@ -143,7 +110,8 @@ export default function App() {
 
     const updatedHistory = [newRecord, ...loginHistory];
     setLoginHistory(updatedHistory);
-    pushCloudData(pengajuanList, updatedHistory);
+    saveLocalLoginHistory(updatedHistory);
+    addLoginRecordToFirestore(newRecord);
   };
 
   const handleLogout = () => {
@@ -152,46 +120,24 @@ export default function App() {
   };
 
   const handleSubmitPengajuan = async (newItem: PengajuanItem) => {
-    // Optimistic UI update
-    const currentList = pengajuanList;
-    const optimisticList = [newItem, ...currentList];
-    setPengajuanList(optimisticList);
-    saveLocalPengajuan(optimisticList);
+    // Save directly to Firestore real-time collection
+    await savePengajuanToFirestore(newItem);
 
-    // Fetch fresh cloud list first to prevent overwriting parallel submissions
-    const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : currentList;
-
-    // Merge newItem with cloudList
-    const updatedList = mergePengajuanLists([newItem], cloudList);
-    setPengajuanList(updatedList);
-    await pushCloudData(updatedList, loginHistory);
-
-    showToast('Pengajuan berhasil dikirim & tersinkron ke semua perangkat!', 'success');
+    showToast('Pengajuan berhasil dikirim & otomatis masuk ke Admin!', 'success');
     setActiveTab('status');
   };
 
   const handleUpdateStatusRTL = async (id: string, newStatus: StatusRTL) => {
-    const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : pengajuanList;
-
-    const updatedList = cloudList.map((item) =>
-      item.id === id ? { ...item, status: newStatus } : item
-    );
-
-    setPengajuanList(updatedList);
-    await pushCloudData(updatedList, loginHistory);
-    showToast(`Status pengajuan ${id} diperbarui: ${newStatus}`, 'success');
+    const existing = pengajuanList.find((item) => item.id === id);
+    if (existing) {
+      const updated = { ...existing, status: newStatus };
+      await savePengajuanToFirestore(updated);
+      showToast(`Status pengajuan ${id} diperbarui: ${newStatus}`, 'success');
+    }
   };
 
   const handleDeletePengajuan = async (id: string) => {
-    const cloud = await fetchCloudData();
-    const cloudList = (cloud && cloud.pengajuanList) ? cloud.pengajuanList : pengajuanList;
-
-    const updatedList = cloudList.filter((item) => item.id !== id);
-
-    setPengajuanList(updatedList);
-    await pushCloudData(updatedList, loginHistory);
+    await deletePengajuanFromFirestore(id);
     showToast(`Pengajuan ${id} berhasil dihapus`, 'success');
   };
 
@@ -244,7 +190,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         role={currentUser.role}
         schoolSettings={schoolSettings}
-        onSyncCloud={() => handleCloudSync(true)}
+        onSyncCloud={handleManualSync}
         onLogout={handleLogout}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
