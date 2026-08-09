@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Pengajuan Barang SMP Kusuma Bangsa",
+  "description": "Sistem pengajuan barang digital real-time untuk guru dan staf SMP Kusuma Bangsa Bogor dengan fitur status RTL, ekspor PDF/Excel, dan manajemen user.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
